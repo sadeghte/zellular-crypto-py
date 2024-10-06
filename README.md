@@ -5,7 +5,7 @@ find and install proper Cuda Toolkit version from [Nvidia Website](https://devel
 ```bash
 $ nvidia-smi
 ```
-You shuild see Driver and Cuda version in the output like the output sample below.
+You should see the Driver and the Cuda version in the output like the output sample below.
 
 ```bash
 dev-pc:~$ nvidia-smi
