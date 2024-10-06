@@ -1,0 +1,28 @@
+# Ignore Python bytecode files
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Ignore all __pycache__ directories, including nested ones
+**/__pycache__/
+
+# Optional: Ignore all virtual environments, logs, and temp files across the repo
+
+# Virtual environment directories
+**/venv/
+**/env/
+**/.venv/
+**/.env/
+
+# Ignore Jupyter Notebook checkpoints
+**/.ipynb_checkpoints/
+
+# Ignore logs
+**/*.log
+**/*.so
+
+solana-perf-libs/
+solana-perf-libs/**/*.*
+
+
+
