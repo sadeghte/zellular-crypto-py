@@ -119,7 +119,7 @@ def ed25519_sign_many(elems: gpu_Elems, num_elems: int, message_size: int, total
                                  signatures_out, use_non_default_stream)
 
 def ed25519_verify_many(elems: gpu_Elems, num_elems: int, message_size: int, total_packets: int, total_signatures: int, 
-                        message_lens: list, public_key_offsets: list, private_key_offsets: list, message_start_offsets: list,
+                        message_lens: list, public_key_offsets: list, signature_offsets: list, message_start_offsets: list,
                         out: bytearray, use_non_default_stream: int):
 
     # msg_lens_array = (c_uint32 * len(message_lens))(*message_lens)
@@ -133,7 +133,7 @@ def ed25519_verify_many(elems: gpu_Elems, num_elems: int, message_size: int, tot
     #                                out_array, use_non_default_stream)
 
     cuda_crypt.ed25519_verify_many(elems, num_elems, message_size, total_packets, total_signatures,
-                                   message_lens, public_key_offsets, private_key_offsets, message_start_offsets,
+                                   message_lens, public_key_offsets, signature_offsets, message_start_offsets,
                                    out, use_non_default_stream)
     
 def ed25519_set_verbose(val: bool) -> None:

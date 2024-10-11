@@ -1,4 +1,4 @@
-import cuda_crypt as cc
+import cuda_crypt.wrapper as cc
 import ctypes, sys, os, random, time, threading
 
 PACKET_SIZE = 512
@@ -299,7 +299,7 @@ def main(argv):
 		# Calculate total and time difference
 		total = num_threads * total_signatures * num_iterations
 		diff = end - start
-		print(f"time diff: {diff:.6f} total: {total} verifies/sec: {total / diff:.2f}")
+		print(f"time diff: {diff:.6f} total: {total} verifies/sec: {(total / diff):.2f}")
 
 		# Verify output from each thread
 		for thread in range(num_threads):

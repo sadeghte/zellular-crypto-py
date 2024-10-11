@@ -1,1 +1,1 @@
-from .module import *
+from .api import create_keypair, sign, sign_many, verify, verify_many
