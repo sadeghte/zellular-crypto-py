@@ -46,7 +46,6 @@ class VerifyCpuCtx(ctypes.Structure):
         ("signature_offsets", ctypes.POINTER(ctypes.c_uint32)),
         ("message_start_offsets", ctypes.POINTER(ctypes.c_uint32)),
         ("out_h", ctypes.POINTER(ctypes.c_uint8)),
-        ("num_iterations", ctypes.c_int),
         ("use_non_default_stream", ctypes.c_uint8)
     ]
 
@@ -92,12 +91,12 @@ def main(argv):
 			break
 
 	# Check if the required number of arguments is provided
-	if (len(argv) - arg) != 6:
-		print(f"usage: {argv[0]} [-v] <num_signatures> <num_elems> <num_sigs_per_packet> <num_threads> <num_iterations> <use_non_default_stream>")
+	if (len(argv) - arg) != 4:
+		print(f"usage: {argv[0]} [-v] <num_signatures> <num_elems> <num_threads> <use_non_default_stream>")
 		return 1
 
 	cc.ed25519_set_verbose(verbose)
-	os.environ["CC_VERBOSE"] = "1" if verbose else "0"
+	os.environ["VERBOSE"] = "1" if verbose else "0"
 
 	# Parse arguments and validate them
 	try :
@@ -111,20 +110,10 @@ def main(argv):
 		if num_elems <= 0:
 			raise ValueError("num_elems should be > 0")
 
-		num_sigs_per_packet = int(argv[arg])
-		arg += 1
-		if num_sigs_per_packet <= 0:
-			raise ValueError("num_sigs_per_packet should be > 0")
-
 		num_threads = int(argv[arg])
 		arg += 1
 		if num_threads <= 0:
 			raise ValueError("num_threads should be > 0")
-
-		num_iterations = int(argv[arg])
-		arg += 1
-		if num_iterations <= 0:
-			raise ValueError("num_iterations should be > 0")
 
 		use_non_default_stream = int(argv[arg])
 		arg += 1
@@ -167,7 +156,6 @@ def main(argv):
 			vctx[i].public_key_offsets = public_key_offsets
 			vctx[i].private_key_offsets = private_key_offsets
 			vctx[i].message_start_offsets = message_start_offsets
-			vctx[i].num_iterations = num_iterations
 			vctx[i].use_non_default_stream = use_non_default_stream
 
 		packets_h = (StreamerPacket * num_signatures_per_elem)()
@@ -297,7 +285,7 @@ def main(argv):
 		end = get_time()
 
 		# Calculate total and time difference
-		total = num_threads * total_signatures * num_iterations
+		total = num_threads * total_signatures
 		diff = end - start
 		print(f"time diff: {diff:.6f} total: {total} verifies/sec: {(total / diff):.2f}")
 

@@ -22,6 +22,8 @@ def is_prime(n):
 
 def main(argv):
 
+	os.environ["VERBOSE"] = "1"
+
 	# Check if the required number of arguments is provided
 	if (len(argv) - 1) != 1:
 		raise ValueError(f"usage: {argv[0]} <num_signatures>")

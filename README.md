@@ -38,5 +38,5 @@ $ make
 
 # Run test
 ```py
-$ python ./test-2.py -v 20000 100 1 1 1 1
+$ python ./test-2.py -v 20000 100 1 1
 ```

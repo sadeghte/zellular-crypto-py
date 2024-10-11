@@ -115,6 +115,8 @@ def sign_many(messages: list[bytes], pub_keys: list[bytes], priv_keys: list[byte
 	count = len(messages);
 	if count != len(pub_keys) or count != len(priv_keys):
 		raise ValueError("parameters length must be same") 
+	
+	prepare_start = get_time();
 
 	# Allocate arrays (equivalent to ed25519_alloc)
 	message_lens = (ctypes.c_uint32 * count)()
@@ -175,7 +177,7 @@ def sign_many(messages: list[bytes], pub_keys: list[bytes], priv_keys: list[byte
 		use_non_default_stream = 1,
 	)
       
-	start = get_time()
+	gpu_start = get_time()
 	signatures_h = (ctypes.c_uint8 * (cc.SIG_SIZE * count))()
 	cc.ed25519_sign_many(
 		vctx.elems_h,
@@ -190,7 +192,12 @@ def sign_many(messages: list[bytes], pub_keys: list[bytes], priv_keys: list[byte
 		signatures_h,
 		vctx.use_non_default_stream,
 	);
-	end = get_time()
+	gpu_end = get_time()
+
+	prepare_time = gpu_start - prepare_start
+	gpu_time = gpu_end - gpu_start
+	LOG(f"sign) prepare: {prepare_time:.2f} sec,  gpu: {gpu_time:.2f} sec")
+	LOG(f"sign) over-all performance: {count/(prepare_time+gpu_time):.2f},  gpu performance: {count/gpu_time:.2f}")
 
 	return [bytes(signatures_h[i*cc.SIG_SIZE:(i+1)*cc.SIG_SIZE]) for i in range(count)]
 
@@ -289,7 +296,7 @@ def verify_many(signatures: list[bytes], messages: list[bytes], pub_keys: list[b
 
 	prepare_time = prepare_end - prepare_start
 	gpu_time = gpu_end - gpu_start
-	print(f"prepare: {prepare_time:.2f} sec,  gpu: {gpu_time:.2f} sec")
-	print(f"over-all performance: {count/(gpu_end-prepare_start):.2f},  gpu performance: {count/gpu_time:.2f}")
+	LOG(f"verify) prepare: {prepare_time:.2f} sec,  gpu: {gpu_time:.2f} sec")
+	LOG(f"verify) over-all performance: {count/(gpu_end-prepare_start):.2f},  gpu performance: {count/gpu_time:.2f}")
 
 	return bytes(out_h)
