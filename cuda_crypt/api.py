@@ -1,5 +1,6 @@
 import cuda_crypt.wrapper as cc
-import os, time, ctypes, threading
+import os, time, ctypes, math
+
 
 PACKET_SIZE = 512
 
@@ -20,10 +21,9 @@ class StreamerPacket(ctypes.Structure):
 
 class Packet(ctypes.Structure):
     _fields_ = [
+        ("private_key", ctypes.c_uint8 * cc.PRIV_KEY_SIZE),
         ("signature", ctypes.c_uint8 * cc.SIG_SIZE),
         ("public_key", ctypes.c_uint8 * cc.PUB_KEY_SIZE),
-        ("private_key", ctypes.c_uint8 * cc.PRIV_KEY_SIZE),
-        ("message_len", ctypes.c_uint32),
         ("message", ctypes.c_uint8 * 8)
     ]
 
@@ -197,106 +197,64 @@ def sign_many(messages: list[bytes], pub_keys: list[bytes], priv_keys: list[byte
 	prepare_time = gpu_start - prepare_start
 	gpu_time = gpu_end - gpu_start
 	LOG(f"sign) prepare: {prepare_time:.2f} sec,  gpu: {gpu_time:.2f} sec")
-	LOG(f"sign) over-all performance: {count/(prepare_time+gpu_time):.2f},  gpu performance: {count/gpu_time:.2f}")
+	LOG(f"sign) over-all performance: {count/(prepare_time+gpu_time):.2f},  gpu performance: {count/gpu_time:.2f}\n")
 
 	return [bytes(signatures_h[i*cc.SIG_SIZE:(i+1)*cc.SIG_SIZE]) for i in range(count)]
 
-def verify_many(signatures: list[bytes], messages: list[bytes], pub_keys: list[bytes]) :
-	count = len(signatures);
-	if count != len(signatures) or count != len(pub_keys):
-		raise ValueError("parameters lent must be same") 
+def padding_size():
+	return ctypes.sizeof(StreamerPacket);
+
+def verify_many(joined_data: bytearray, msg_lens: list[int]) :
+	count = len(msg_lens);
 
 	# Allocate arrays (equivalent to ed25519_alloc)
 	message_lens = (ctypes.c_uint32 * count)()
 	signature_offsets = (ctypes.c_uint32 * count)()
 	public_key_offsets = (ctypes.c_uint32 * count)()
-	private_key_offsets = (ctypes.c_uint32 * count)()
 	message_start_offsets = (ctypes.c_uint32 * count)()
 
 	# Fill offsets and lengths
+	offset_shift = Packet.signature.offset
 	for i in range(count):
 		base_offset = i * ctypes.sizeof(StreamerPacket)
-		signature_offsets[i] = base_offset + Packet.signature.offset
-		public_key_offsets[i] = base_offset + Packet.public_key.offset
-		private_key_offsets[i] = base_offset + Packet.private_key.offset
-		message_start_offsets[i] = base_offset + Packet.message.offset
-		message_lens[i] = len(messages[i])
-
-	# Allocating packets memory
-	packets_h = (StreamerPacket * count)()
+		signature_offsets[i] = base_offset + Packet.signature.offset - offset_shift
+		public_key_offsets[i] = base_offset + Packet.public_key.offset - offset_shift
+		message_start_offsets[i] = base_offset + Packet.message.offset - offset_shift
+		message_lens[i] = msg_lens[i]
 
 	prepare_start = get_time()
 
 	# Initing packets...
-	for i in range(count):
-		packet = ctypes.cast(ctypes.byref(packets_h[i]), ctypes.POINTER(Packet)).contents
-
-		# copy message to the packet
-		# ctypes.memmove(packet.message, messages[i], len(messages[i]))
-		msg_len = len(messages[i])
-		packet.message[:msg_len] = messages[i][:msg_len]
-
-		# Copy the public key and private key to the packet
-		# ctypes.memmove(packet.public_key, ctypes.byref(pub_keys[i], i * cc.PUB_KEY_SIZE), cc.PUB_KEY_SIZE)
-		packet.public_key[:cc.PUB_KEY_SIZE] = pub_keys[i][:cc.PUB_KEY_SIZE]
-
-		# Copy signatures into the packet
-		# ctypes.memmove(packet.signature, ctypes.byref(signatures_h, i * cc.SIG_SIZE), cc.SIG_SIZE)
-            
-		# Get the current signature
-		signature = signatures[i]
-
-		# Ensure the signature length matches the expected size
-		if len(signature) != cc.SIG_SIZE:
-			raise ValueError(f"Signature size does not match expected size of {cc.SIG_SIZE} bytes")
-		
-		# Copy the signature bytes into the packet's signature field
-		packet.signature[:cc.SIG_SIZE] = signature[:cc.SIG_SIZE]
-	
+	total_size = padding_size() * count
 	gpu_elem = cc.gpu_Elems(
 		num = count,
-		elems = ctypes.cast(ctypes.pointer(packets_h[0]), ctypes.POINTER(ctypes.c_uint8))
+		elems = (ctypes.c_uint8 * total_size).from_buffer(joined_data)
 	)
 	
-
-	# Create verify_cpu_ctx_t structure
 	out_size = count * ctypes.sizeof(ctypes.c_uint8)
 	out_h = (ctypes.c_uint8 * out_size)()
       
-	vctx = VerifyCpuCtx(
-		elems_h = ctypes.pointer(gpu_elem),
-        num_elems = 1,
-		total_packets=count,
-		total_signatures=count,
-		message_lens = message_lens,
-		public_key_offsets = public_key_offsets,
-		private_key_offsets = private_key_offsets,
-		signature_offsets = signature_offsets,
-		message_start_offsets = message_start_offsets,
-		out_h = out_h,
-		use_non_default_stream = 1,
-	)
 	prepare_end = get_time()
       
 	gpu_start = get_time()
 	cc.ed25519_verify_many(
-		vctx.elems_h,
-		vctx.num_elems,
-		ctypes.sizeof(StreamerPacket),  # Replace with appropriate packet size
-		vctx.total_packets,
-		vctx.total_signatures,
-		vctx.message_lens,
-		vctx.public_key_offsets,
-		vctx.signature_offsets,
-		vctx.message_start_offsets,
-		vctx.out_h,
-		vctx.use_non_default_stream,
+		elems=ctypes.pointer(gpu_elem),
+		num_elems=1,
+		message_size=ctypes.sizeof(StreamerPacket),  # Replace with appropriate packet size
+		total_packets=count,
+		total_signatures=count,
+		message_lens=message_lens,
+		public_key_offsets=public_key_offsets,
+		signature_offsets=signature_offsets,
+		message_start_offsets=message_start_offsets,
+		out=out_h,
+		use_non_default_stream=1,
 	);
 	gpu_end = get_time()
 
 	prepare_time = prepare_end - prepare_start
 	gpu_time = gpu_end - gpu_start
-	LOG(f"verify) prepare: {prepare_time:.2f} sec,  gpu: {gpu_time:.2f} sec")
-	LOG(f"verify) over-all performance: {count/(gpu_end-prepare_start):.2f},  gpu performance: {count/gpu_time:.2f}")
+	LOG(f"verify) copy: prepare: {prepare_time:.2f} sec,  gpu: {gpu_time:.2f} sec")
+	LOG(f"verify) over-all performance: {count/(gpu_end-prepare_start):.2f},  gpu performance: {count/gpu_time:.2f}\n")
 
 	return bytes(out_h)

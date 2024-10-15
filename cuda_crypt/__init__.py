@@ -1,1 +1,1 @@
-from .api import create_keypair, sign, sign_many, verify, verify_many
+from .api import create_keypair, sign, sign_many, verify, verify_many, padding_size
